@@ -280,7 +280,7 @@ gse_module_purple <- enrichGO(gene= module_df %>% filter(colors == "purple") %>%
                               maxGSSize = 800, 
                               pvalueCutoff = 0.1)
 # result: no significance
-writexl::write_xlsx(gse_module_green@result,"data_output/GO_module_green.xlsx")v
+writexl::write_xlsx(gse_module_purple@result,"data_output/GO_module_purple.xlsx")
 gse_module_orange <- enrichGO(gene= module_df %>% filter(colors == "orange") %>% pull(protein_id), #49 proteins
                               ont ="ALL", universe = module_df %>% pull(protein_id),
                               OrgDb = organism,
@@ -301,7 +301,7 @@ GP_BP_green$Description <- factor(GP_BP_green$Description,levels = GP_BP_green$D
 pdf("plots/GO_BP_green_module.pdf") 
 ggplot(GP_BP_green,aes(Description,log10_FDR,fill = log10_FDR)) + 
   geom_bar(stat = "identity")  + 
-  scale_fill_continuous(low="blue", high="red") + coord_flip() + theme_minimal() +
+  scale_fill_gradient(low = "blue", high = "red") + coord_flip() + theme_minimal() +
   ylab("-log10(FDR)") + xlab("Biological Process Term")
 dev.off()
 
@@ -314,7 +314,7 @@ GP_CC_orange$Description <- factor(GP_CC_orange$Description,levels = GP_CC_orang
 pdf("plots/GP_CC_orange_module.pdf") 
 ggplot(GP_CC_orange,aes(Description,log10_FDR,fill = log10_FDR)) + 
   geom_bar(stat = "identity")  + 
-  scale_fill_continuous(low="blue", high="red") + coord_flip() + theme_minimal() +
+  scale_fill_gradient(low="blue", high="red") + coord_flip() + theme_minimal() +
   ylab("-log10(FDR)") + xlab("Cellular Component Term")
 dev.off()
 
@@ -326,12 +326,21 @@ GP_MF_orange$Description <- factor(GP_MF_orange$Description,levels = GP_MF_orang
 pdf("plots/GP_MF_orange_module.pdf") 
 ggplot(GP_MF_orange,aes(Description,log10_FDR,fill = log10_FDR)) + 
   geom_bar(stat = "identity")  + 
-  scale_fill_continuous(low="blue", high="red") + coord_flip() + theme_minimal() +
+  scale_fill_gradient(low="blue", high="red") + coord_flip() + theme_minimal() +
   ylab("-log10(FDR)") + xlab("Molecular Function Term")
 dev.off()
 
 # ------------------------------------------------
 ## Correlation of modules with clinical variables 
+# -> NfL or pNfH
+clinical_data$NfL # NfL with less missing but there is no intersection between them
+clinical_data$pNfH
+# -> Progression rate group (high or low)
+median_PR <- median(clinical_data$PR,na.rm = T)
+clinical_data$PR_group = ifelse(clinical_data$PR <= median_PR,"low","high")
+# Age at onset group (high or low)
+median_AO = median(clinical_data$AAO,na.rm = T)
+clinical_data$AAO_group = ifelse(clinical_data$AAO <= median_AO,"low","high")
 
 mME_clinical = MEs0 %>%
   pivot_longer(-patient) %>%
@@ -340,7 +349,7 @@ mME_clinical = MEs0 %>%
     name = factor(name, levels = module_order)) %>%
   left_join(clinical_data %>% 
               dplyr::select(Patient,Diagnosis,Site,ALSFRSR_1,
-                     ALSFRSR_2,VC_percent,NfL,pNfH,
+                     VC_percent,NfL,PR_group,AAO_group,RL_total,
                      Eye_disease_cat,Eye_medication,CL) %>%
               dplyr::rename(patient = Patient) %>%
               distinct()) %>%
@@ -353,8 +362,9 @@ module_matrix <- mME_clinical %>%
   column_to_rownames(var = "patient")
 
 clinical <- mME_clinical %>%
-  dplyr::select(patient, Diagnosis, Site, ALSFRSR_1, ALSFRSR_2, VC_percent, NfL, pNfH,
-         Eye_disease_cat, Eye_medication, CL) %>%
+  dplyr::select(patient, Diagnosis, Site, ALSFRSR_1, VC_percent, NfL,
+                PR_group,AAO_group,RL_total,
+                Eye_disease_cat, Eye_medication, CL) %>%
   distinct(patient, .keep_all = TRUE) %>%
   column_to_rownames(var = "patient")
 
@@ -506,8 +516,8 @@ for(module in modules){
 }
 
 # -----------------------------
-# clinical vairables and modules of interest: pnfH & VC_percent (orange),
-# NfL (purple) and site, ALSFRS2 (green)
+# clinical variables and modules of interest: RL_total, eye disease (orange),
+# RL_total, NfL (purple) 
 
 # orange
 proteins_orange <- module_df %>%
@@ -527,11 +537,9 @@ proteins_green <- module_df %>%
 # module clinical pairs of interest
 module_clinical_pairs = list(
   list(module = "purple", proteins = proteins_purple, clinical = "NfL"),
-  list(module = "orange", proteins =  proteins_orange, clinical = "pNfH"),
-  list(module = "orange", proteins =  proteins_orange, clinical = "VC_percent"),
-  list(module = "green", proteins =  proteins_green, clinical = "Site"),
-  list(module = "green", proteins =  proteins_green, clinical = "ALSFRSR_2")
-)
+  list(module = "purple", proteins =  proteins_orange, clinical = "RL_total"),
+  list(module = "orange", proteins =  proteins_orange, clinical = "RL_total"),
+  list(module = "orange", proteins =  proteins_green, clinical = "Eye_disease_cat"))
 
 plot_module_vs_clinical <- function(module_name, clinical_var_name,
                                     expression_data, module_df, clinical_data,
@@ -554,7 +562,8 @@ plot_module_vs_clinical <- function(module_name, clinical_var_name,
     tidyr::pivot_longer(cols = -Patient, names_to = "Protein", values_to = "Expression") %>%
     dplyr::left_join(clinical_data %>% dplyr::select(Patient, all_of(clinical_var_name)),
                      by = "Patient") %>%
-    dplyr::filter(!is.na(Expression) & !is.na(.data[[clinical_var_name]]))
+    dplyr::filter(!is.na(Expression) & !is.na(.data[[clinical_var_name]]) &
+                    .data[[clinical_var_name]]!="0")
   
   if(nrow(df_long) == 0){
     message("No valid data for module ", module_name, " vs ", clinical_var_name)
@@ -572,7 +581,9 @@ plot_module_vs_clinical <- function(module_name, clinical_var_name,
       if(n < 2) return(tibble(label = NA_character_, y_pos = NA_real_))
       
       y_var <- dat[[clinical_var_name]]
-      expr_vals <- dat$Expression
+      expr_vals <- dat[!is.na(y_var) & y_var != "0",]$Expression
+      y_var <- y_var[!is.na(y_var) & y_var != "0"]
+      print(y_var)
       
       if(is.numeric(y_var)){
         rho <- round(cor(expr_vals, y_var, method = "spearman", use="pairwise.complete.obs"), 2)

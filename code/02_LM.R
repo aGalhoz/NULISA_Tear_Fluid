@@ -42,10 +42,10 @@ ROC_curve_balanced = calculateROC_balanced(lm_balanced,df_ml,'plots/rocc_lm_bala
 write.csv(ROC_curve_balanced$roc_data, file = 'data_output/rocc_lm_balanced.csv')
 
 # extract weights + plot averaged
-lm_weights = plotWeights(lm,"plots/weights_lm.pdf",number = 37)
+lm_weights = plotWeights(lm,"plots/weights_lm.pdf",number = 39)
 write.csv(lm_weights, file = 'data_output/weights_lm.csv')
 
-lm_weights_balanced = plotWeights(lm_balanced,"plots/weights_lm_balanced.pdf",number = 25)
+lm_weights_balanced = plotWeights(lm_balanced,"plots/weights_lm_balanced.pdf",number = 23)
 write.csv(lm_weights_balanced, file = 'data_output/weights_lm_balanced.csv')
 
 # Lasso output and DE from Basal vs reflex
